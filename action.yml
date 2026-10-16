@@ -1,0 +1,119 @@
+name: Evalkit
+description: Ajaa prompt-sarjan malleille ja kaataa työnkulun vain regressioista (vertaa baselineen). Tukee ilmaisia cassette-ajoja. / Eval runner with a regression gate.
+author: tonyweckstrom1987
+
+inputs:
+  mode:
+    description: '"run" ajaa evalsetin (oletus), "validate" tarkistaa tiedostot ilman verkkoa ja kuluja.'
+    required: false
+    default: "run"
+  eval-set:
+    description: Polku evalset-tiedostoon (run). validate-tilassa useampi tiedosto välilyönnillä erotettuna.
+    required: true
+  models:
+    description: Mallit pilkulla eroteltuna (run).
+    required: false
+    default: ""
+  base-url:
+    description: OpenAI-yhteensopiva osoite, esim. https://litellm.local/v1 (run).
+    required: false
+    default: ""
+  baseline:
+    description: Polku baseline-tiedostoon. Vain regressiot kaatavat ajon. Ilman tätä kaikkien arvioitavien tapausten pitää läpäistä.
+    required: false
+    default: ""
+  max-pass-drop:
+    description: Sallittu läpäisyprosentin lasku (0-1). Oletus 0 = yksikin regressio kaataa ajon.
+    required: false
+    default: ""
+  cassette:
+    description: Polku llm-cassette-tiedostoon. Ilman cassette-mode-asetusta vastaukset toistetaan tiedostosta eikä verkkoa käytetä.
+    required: false
+    default: ""
+  cassette-mode:
+    description: 'replay (oletus), record tai auto. CI:ssä käytä replay-tilaa.'
+    required: false
+    default: ""
+  judge-model:
+    description: Tuomarimalli minJudgeScore-ehdolle. Valitse eri malli kuin arvioitavat.
+    required: false
+    default: ""
+  max-tokens:
+    description: max_tokens per kutsu (katto 4096).
+    required: false
+    default: ""
+  concurrency:
+    description: Samanaikaiset kutsut.
+    required: false
+    default: ""
+  timeout-ms:
+    description: Aikakatkaisu per kutsu millisekunteina.
+    required: false
+    default: ""
+  api-key-env:
+    description: Ympäristömuuttujan nimi, josta API-avain luetaan (oletus LLM_API_KEY). Aseta muuttuja tämän askeleen env-lohkossa secretistä.
+    required: false
+    default: ""
+  json-report:
+    description: Kirjoita koko raportti JSON-tiedostoon tähän polkuun. Raportti sisältää mallien vastaukset; älä commitoi sitä.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+
+    - name: Asenna ja käännä evalkit
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: npm ci --no-audit --no-fund
+
+    - name: Aja evalkit
+      shell: bash
+      env:
+        INPUT_MODE: ${{ inputs.mode }}
+        INPUT_EVAL_SET: ${{ inputs.eval-set }}
+        INPUT_MODELS: ${{ inputs.models }}
+        INPUT_BASE_URL: ${{ inputs.base-url }}
+        INPUT_BASELINE: ${{ inputs.baseline }}
+        INPUT_MAX_PASS_DROP: ${{ inputs.max-pass-drop }}
+        INPUT_CASSETTE: ${{ inputs.cassette }}
+        INPUT_CASSETTE_MODE: ${{ inputs.cassette-mode }}
+        INPUT_JUDGE_MODEL: ${{ inputs.judge-model }}
+        INPUT_MAX_TOKENS: ${{ inputs.max-tokens }}
+        INPUT_CONCURRENCY: ${{ inputs.concurrency }}
+        INPUT_TIMEOUT: ${{ inputs.timeout-ms }}
+        INPUT_API_KEY_ENV: ${{ inputs.api-key-env }}
+        INPUT_JSON_REPORT: ${{ inputs.json-report }}
+      run: |
+        # Syötteet välitetään ympäristömuuttujina, ei suoraan komentoriville (ei komentoinjektiota).
+        read -ra files <<< "$INPUT_EVAL_SET"
+        [ "${#files[@]}" -eq 0 ] && { echo "Anna eval-set" >&2; exit 2; }
+        case "$INPUT_MODE" in
+          validate)
+            exec node "$GITHUB_ACTION_PATH/dist/bin.js" validate "${files[@]}"
+            ;;
+          run | "") ;;
+          *) echo "Tuntematon mode '$INPUT_MODE' (käytä run tai validate)" >&2; exit 2 ;;
+        esac
+        [ "${#files[@]}" -ne 1 ] && { echo "run-tila ottaa yhden eval-set-tiedoston" >&2; exit 2; }
+        [ -z "$INPUT_MODELS" ] && { echo "Anna models" >&2; exit 2; }
+        [ -z "$INPUT_BASE_URL" ] && { echo "Anna base-url" >&2; exit 2; }
+        args=(run "${files[0]}" --models "$INPUT_MODELS" --base-url "$INPUT_BASE_URL")
+        [ -n "$INPUT_BASELINE" ] && args+=(--baseline "$INPUT_BASELINE")
+        [ -n "$INPUT_MAX_PASS_DROP" ] && args+=(--max-pass-drop "$INPUT_MAX_PASS_DROP")
+        [ -n "$INPUT_CASSETTE" ] && args+=(--cassette "$INPUT_CASSETTE")
+        [ -n "$INPUT_CASSETTE_MODE" ] && args+=(--cassette-mode "$INPUT_CASSETTE_MODE")
+        [ -n "$INPUT_JUDGE_MODEL" ] && args+=(--judge-model "$INPUT_JUDGE_MODEL")
+        [ -n "$INPUT_MAX_TOKENS" ] && args+=(--max-tokens "$INPUT_MAX_TOKENS")
+        [ -n "$INPUT_CONCURRENCY" ] && args+=(--concurrency "$INPUT_CONCURRENCY")
+        [ -n "$INPUT_TIMEOUT" ] && args+=(--timeout-ms "$INPUT_TIMEOUT")
+        [ -n "$INPUT_JSON_REPORT" ] && args+=(--json "$INPUT_JSON_REPORT")
+        if [ -n "$INPUT_API_KEY_ENV" ]; then
+          [[ "$INPUT_API_KEY_ENV" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || { echo "Virheellinen ympäristömuuttujan nimi: $INPUT_API_KEY_ENV" >&2; exit 2; }
+          args+=(--api-key-env "$INPUT_API_KEY_ENV")
+        fi
+        exec node "$GITHUB_ACTION_PATH/dist/bin.js" "${args[@]}"

@@ -37,3 +37,40 @@ jobs:
 
       - name: Audit
         run: npm audit --omit=dev --audit-level=high
+
+  action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Action (validate)
+        uses: ./
+        with:
+          mode: validate
+          eval-set: examples/yleinen-fi.json
+
+      - name: Action (run, cassette-toisto, baseline täsmää)
+        uses: ./
+        with:
+          eval-set: examples/yleinen-fi.json
+          models: demo
+          base-url: https://litellm.example/v1
+          baseline: test/fixtures/action/baseline-ok.json
+          cassette: test/fixtures/action/yleinen.cassette.json
+
+      - name: Action (run, regressio kaataa ajon)
+        id: regressio
+        continue-on-error: true
+        uses: ./
+        with:
+          eval-set: examples/yleinen-fi.json
+          models: demo
+          base-url: https://litellm.example/v1
+          baseline: test/fixtures/action/baseline-regressio.json
+          cassette: test/fixtures/action/yleinen.cassette.json
+
+      - name: Varmista, että regressio kaatoi edellisen askeleen
+        if: steps.regressio.outcome != 'failure'
+        run: |
+          echo "Regressiobaseline ei kaatanut ajoa (outcome: ${{ steps.regressio.outcome }})" >&2
+          exit 1
