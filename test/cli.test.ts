@@ -109,3 +109,52 @@ describe("cli", () => {
     expect(JSON.parse(readFileSync(jp, "utf8")).cases).toHaveLength(2);
   });
 });
+
+describe("cli: --cassette", () => {
+  let dir: string;
+  let setPath: string;
+  let cassette: string;
+  let out: string;
+  let err: string;
+  const io = (llm: ReturnType<typeof fakeLlm> | undefined, env: Record<string, string> = {}) => ({
+    env,
+    stdout: (s: string) => void (out += s),
+    stderr: (s: string) => void (err += s),
+    fetch: llm?.fetch,
+  });
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "evalkit-cas-"));
+    setPath = join(dir, "set.json");
+    cassette = join(dir, "c", "yleinen.json");
+    writeFileSync(setPath, JSON.stringify({ version: 1, cases: [{ id: "a-01", prompt: "p", expect: { contains: "Helsinki" } }] }));
+    out = "";
+    err = "";
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+  const args = (...extra: string[]) => ["run", setPath, "--models", "m", "--base-url", "http://llm.local/v1", "--cassette", cassette, ...extra];
+
+  it("record tallentaa vastaukset, replay toistaa ne ilman yhtään verkkokutsua ja ilman avainta tiedostossa", async () => {
+    const rec = fakeLlm(() => "Helsinki");
+    expect(await main(args("--cassette-mode", "record"), io(rec, { LLM_API_KEY: "sk-ei-tiedostoon" }))).toBe(0);
+    expect(rec.calls).toHaveLength(1);
+    expect(readFileSync(cassette, "utf8")).not.toContain("sk-ei-tiedostoon");
+
+    const never = fakeLlm(() => "EI SAA KUTSUA");
+    expect(await main(args(), io(never))).toBe(0); // oletustila replay
+    expect(never.calls).toHaveLength(0);
+  });
+
+  it("replay ilman tallennetta ei kutsu verkkoa ja kaataa tapauksen selkeällä viestillä", async () => {
+    const never = fakeLlm(() => "Helsinki");
+    expect(await main(args(), io(never))).toBe(1);
+    expect(never.calls).toHaveLength(0);
+    expect(out).toMatch(/tallennetta ei löytynyt/);
+  });
+
+  it("tuntematon --cassette-mode ja --cassette-mode ilman --cassettea -> 2", async () => {
+    expect(await main(args("--cassette-mode", "joku"), io(undefined))).toBe(2);
+    expect(err).toMatch(/tuntematon tila/);
+    expect(await main(["run", setPath, "--models", "m", "--base-url", "http://x", "--cassette-mode", "record"], io(undefined))).toBe(2);
+  });
+});

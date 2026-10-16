@@ -29,6 +29,8 @@ Valinnat:
   --concurrency <n>       Samanaikaiset kutsut (oletus 4)
   --timeout-ms <ms>       Aikakatkaisu per kutsu (oletus 60000)
   --max-tokens <n>        max_tokens per kutsu (oletus 1024, katto 4096)
+  --cassette <tiedosto>   Toista/tallenna mallivastaukset llm-cassette-tiedostosta (vaatii llm-cassette-paketin)
+  --cassette-mode <tila>  replay (oletus, ei koskaan verkkoa), record tai auto
   --json <tiedosto>       Kirjoita koko raportti JSON-tiedostoon
 
 Poistumiskoodit: 0 = ok, 1 = regressio tai epäonnistuneita tapauksia, 2 = virhe käytössä tai asetuksissa.
@@ -93,6 +95,16 @@ function formatComparison(cmp: Comparison): string {
   return lines.join("\n");
 }
 
+async function cassetteFetchFor(path: string, mode: string | undefined, realFetch: typeof fetch | undefined): Promise<typeof fetch> {
+  let mod: typeof import("llm-cassette");
+  try {
+    mod = await import("llm-cassette");
+  } catch {
+    throw new Error("--cassette vaatii llm-cassette-paketin: npm install --save-dev github:tonyweckstrom1987/llm-cassette");
+  }
+  return mod.cassetteFetch({ path, mode: (mode as "replay" | "record" | "auto" | undefined) ?? "replay", fetch: realFetch });
+}
+
 /** Ajaa komentorivin ja palauttaa poistumiskoodin. Ei kutsu process.exit-funktiota. */
 export async function main(argv: string[], io: CliIo): Promise<number> {
   let args: Args;
@@ -128,12 +140,17 @@ export async function main(argv: string[], io: CliIo): Promise<number> {
       throw new Error(`Baselinea '${baselinePath}' ei löydy. Luo se ensin: lisää --update-baseline`);
     }
 
+    const cassettePath = args.flags["cassette"] as string | undefined;
+    const cassetteMode = args.flags["cassette-mode"] as string | undefined;
+    if (cassetteMode !== undefined && !cassettePath) throw new Error("--cassette-mode tarvitsee --cassette <tiedosto>");
+    const fetchImpl = cassettePath ? await cassetteFetchFor(cassettePath, cassetteMode, io.fetch) : io.fetch;
+
     const report = await runEval({
       set,
       models,
       baseUrl,
       apiKey: io.env[keyEnv],
-      fetch: io.fetch,
+      fetch: fetchImpl,
       judgeModel: args.flags["judge-model"] as string | undefined,
       concurrency: intFlag(args.flags, "concurrency"),
       timeoutMs: intFlag(args.flags, "timeout-ms"),

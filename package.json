@@ -1,6 +1,6 @@
 {
   "name": "evalkit",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Aja sama prompt-sarja usealla mallilla ja estä regressiot CI:ssä: CLI, joka vertaa tuloksia edelliseen hyväksyttyyn ajoon. Eval runner with a regression gate for CI.",
   "license": "MIT",
   "type": "module",
@@ -27,7 +27,16 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
+    "llm-cassette": "git+https://github.com/tonyweckstrom1987/llm-cassette.git#21f1ffdd1bc730537826aa93317bd8cc6dec051e",
     "typescript": "^7.0.2",
     "vitest": "^5.0.4"
+  },
+  "peerDependencies": {
+    "llm-cassette": "*"
+  },
+  "peerDependenciesMeta": {
+    "llm-cassette": {
+      "optional": true
+    }
   }
 }

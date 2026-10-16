@@ -8,7 +8,7 @@ Aja sama prompt-sarja usealla mallilla ja estä regressiot CI:ssä. Evalkit vert
 
 **Teknologiat:** TypeScript, Node.js 22/24, zod, vitest.
 
-> **Tila:** Ensimmäinen versio. Ydin (skeema, ajo, ehdot, baseline, CLI) on testattu mallia kutsumatta. Cassette-tuki on toistaiseksi kirjastotasolla (`fetch`-asetus); CLI-valinta ja GitHub Action ovat seuraavia vaiheita.
+> **Tila:** Ensimmäinen versio. Ydin (skeema, ajo, ehdot, baseline, CLI ja `--cassette`) on testattu mallia kutsumatta. GitHub Action on seuraava vaihe.
 
 ## Pika-aloitus
 
@@ -104,6 +104,8 @@ Ilman `--baseline`-valintaa kaikkien arvioitavien tapausten pitää läpäistä.
 | `--concurrency <n>` | Samanaikaiset kutsut (oletus 4). |
 | `--timeout-ms <ms>` | Aikakatkaisu per kutsu (oletus 60000). |
 | `--max-tokens <n>` | `max_tokens` per kutsu (oletus 1024, katto 4096). |
+| `--cassette <tiedosto>` | Toista tai tallenna mallivastaukset [llm-cassette](https://github.com/tonyweckstrom1987/llm-cassette)-tiedostoon (ks. alla). Vaatii llm-cassette-paketin. |
+| `--cassette-mode <tila>` | `replay` (oletus: ei koskaan verkkoa), `record` tai `auto`. |
 | `--json <tiedosto>` | Kirjoita koko raportti JSON-tiedostoon. |
 
 ## Kulut ja turvallisuus
@@ -112,9 +114,25 @@ Ilman `--baseline`-valintaa kaikkien arvioitavien tapausten pitää läpäistä.
 - **API-avain** luetaan vain ympäristömuuttujasta eikä sitä tulosta raporttiin tai virheilmoituksiin.
 - Raportti (`--json`) sisältää mallien vastaukset sellaisinaan. Älä commitoi sitä, jos promptit sisältävät arkaluonteista tietoa.
 
-## Kirjastokäyttö ja llm-cassette
+## Ilmaiset CI-ajot: llm-cassette
 
-`runEval` ottaa `fetch`-asetuksen. Antamalla sille [llm-cassette](https://github.com/tonyweckstrom1987/llm-cassette):n palauttaman funktion CI-ajo toistaa tallennetut vastaukset ilman verkkoa ja ilman kuluja:
+Oikeat mallikutsut maksavat, ja vastaukset vaihtelevat ajosta toiseen. Tallenna vastaukset kerran [llm-cassette](https://github.com/tonyweckstrom1987/llm-cassette)-tiedostoon ja toista ne CI:ssä:
+
+```bash
+npm install --save-dev github:tonyweckstrom1987/llm-cassette
+
+# Kerran paikallisesti, oikealla avaimella: tallentaa vastaukset
+node dist/bin.js run examples/yleinen-fi.json --models m --base-url https://litellm.local/v1 \
+  --baseline evalkit.baseline.json --cassette test/cassettes/yleinen.json --cassette-mode record
+
+# CI:ssä: toistaa tallenteet, ei verkkoa eikä kuluja (replay on oletus)
+node dist/bin.js run examples/yleinen-fi.json --models m --base-url https://litellm.local/v1 \
+  --baseline evalkit.baseline.json --cassette test/cassettes/yleinen.json
+```
+
+Commitoi cassette-tiedosto ja baseline repoon. Jos prompti, malli tai tehtävä muuttuu, `replay` ei löydä vanhaa tallennetta ja kyseinen tapaus kaatuu viestillä "tallennetta ei löytynyt". Tallenna silloin uudelleen `record`-tilassa. Huomaa, että tämä testaa **evalsetin ja ehtojen** toimivuutta tallennettuja vastauksia vastaan, ei mallin nykyistä laatua: mallin laadun muutos näkyy vasta uudessa tallennuksessa.
+
+Kirjastona `runEval` ottaa `fetch`-asetuksen:
 
 ```ts
 import { runEval, loadEvalSet } from "evalkit";
@@ -132,7 +150,7 @@ const report = await runEval({
 
 - Tuomarimalli on vain yhden luvun arvio (1–5), eikä se korvaa ihmisen tarkistusta. Käytä sitä täydentävänä mittarina.
 - Striimausta ei tueta, ja vain tekstivastauksia arvioidaan.
-- CLI ei vielä tue cassettea valintana eikä ole valmis GitHub Action. Ne tulevat seuraavissa versioissa.
+- Ei vielä valmista GitHub Actionia: käytä CLI:tä työnkulun `run`-vaiheessa.
 
 ## Kehitys
 
