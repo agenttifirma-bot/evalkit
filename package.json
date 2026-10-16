@@ -1,0 +1,33 @@
+{
+  "name": "evalkit",
+  "version": "0.1.0",
+  "description": "Aja sama prompt-sarja usealla mallilla ja estä regressiot CI:ssä: CLI, joka vertaa tuloksia edelliseen hyväksyttyyn ajoon. Eval runner with a regression gate for CI.",
+  "license": "MIT",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": "^22.12.0 || ^24.0.0"
+  },
+  "bin": {
+    "evalkit": "dist/bin.js"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepare": "npm run build",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.6.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.4"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "name": "yleinen-fi",
+  "cases": [
+    {
+      "id": "yleinen-01",
+      "tags": ["yleinen tieto"],
+      "prompt": "Mikä on Ruotsin pääkaupunki? Vastaa yhdellä sanalla.",
+      "expect": { "contains": "Tukholma", "notContains": ["Oslo"] }
+    },
+    {
+      "id": "yleinen-02",
+      "tags": ["yleinen tieto"],
+      "prompt": "Kuka kokosi Kalevalan suomalaisista kansanrunoista yhtenäiseksi teokseksi?",
+      "expect": { "contains": "Lönnrot" }
+    },
+    {
+      "id": "lasku-01",
+      "tags": ["laskeminen"],
+      "systemPrompt": "Vastaa vain lopputuloksella, ei välivaiheilla.",
+      "prompt": "Laske 17 + 25.",
+      "expect": { "regex": "^\\s*42\\s*\\.?\\s*$" }
+    }
+  ]
+}

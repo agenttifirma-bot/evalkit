@@ -1,0 +1,111 @@
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { main } from "../src/cli.js";
+import { fakeLlm } from "./helpers.js";
+
+describe("cli", () => {
+  let dir: string;
+  let setPath: string;
+  let out: string;
+  let err: string;
+
+  const io = (llm?: ReturnType<typeof fakeLlm>, env: Record<string, string> = {}) => ({
+    env,
+    stdout: (s: string) => void (out += s),
+    stderr: (s: string) => void (err += s),
+    fetch: llm?.fetch,
+  });
+  const common = () => ["run", setPath, "--models", "m", "--base-url", "http://llm.local/v1"];
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "evalkit-cli-"));
+    setPath = join(dir, "set.json");
+    writeFileSync(setPath, JSON.stringify({ version: 1, cases: [{ id: "a-01", prompt: "p", expect: { contains: "Helsinki" } }, { id: "a-02", prompt: "q", expect: { contains: "Oslo" } }] }));
+    out = "";
+    err = "";
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it("ilman baselinea: kaikki läpi -> 0, yksikin kaatuu -> 1", async () => {
+    expect(await main(common(), io(fakeLlm((c) => (c.messages[0].content === "p" ? "Helsinki" : "Oslo"))))).toBe(0);
+    expect(await main(common(), io(fakeLlm(() => "Helsinki")))).toBe(1);
+    expect(out).toMatch(/Epäonnistuneet tapaukset/);
+  });
+
+  it("--update-baseline kirjoittaa baselinen ja palauttaa 0 vaikka tapauksia kaatuisi", async () => {
+    const bp = join(dir, "base.json");
+    expect(await main([...common(), "--baseline", bp, "--update-baseline"], io(fakeLlm(() => "Helsinki")))).toBe(0);
+    expect(JSON.parse(readFileSync(bp, "utf8")).results).toEqual({ "m::a-01": true, "m::a-02": false });
+  });
+
+  it("baselinea vasten: regressio -> 1, ei regressiota -> 0", async () => {
+    const bp = join(dir, "base.json");
+    writeFileSync(bp, JSON.stringify({ version: 1, results: { "m::a-01": true, "m::a-02": true } }));
+    expect(await main([...common(), "--baseline", bp], io(fakeLlm(() => "Helsinki")))).toBe(1);
+    expect(out).toMatch(/REGRESSIO m::a-02/);
+    expect(await main([...common(), "--baseline", bp], io(fakeLlm((c) => (c.messages[0].content === "p" ? "Helsinki" : "Oslo"))))).toBe(0);
+  });
+
+  it("puuttuva baseline-tiedosto ilman --update-baselinea -> 2 eikä mallikutsuja", async () => {
+    const llm = fakeLlm(() => "Helsinki");
+    expect(await main([...common(), "--baseline", join(dir, "ei.json")], io(llm))).toBe(2);
+    expect(err).toMatch(/--update-baseline/);
+    expect(llm.calls).toHaveLength(0);
+  });
+
+  it("--max-pass-drop sallii yksittäisen regression rajan sisällä", async () => {
+    const bp = join(dir, "base.json");
+    writeFileSync(bp, JSON.stringify({ version: 1, results: { "m::a-01": true, "m::a-02": true } }));
+    expect(await main([...common(), "--baseline", bp, "--max-pass-drop", "0.5"], io(fakeLlm(() => "Helsinki")))).toBe(0);
+    expect(await main([...common(), "--baseline", bp, "--max-pass-drop", "0.4"], io(fakeLlm(() => "Helsinki")))).toBe(1);
+  });
+
+  it("käyttövirheet palauttavat 2: ei argumentteja, tuntematon komento, puuttuvat mallit/osoite/evalset", async () => {
+    expect(await main([], io())).toBe(2);
+    expect(await main(["foo"], io())).toBe(2);
+    expect(await main(["run", setPath, "--base-url", "http://x"], io())).toBe(2);
+    expect(err).toMatch(/Mallit puuttuvat/);
+    expect(await main(["run", setPath, "--models", "m"], io())).toBe(2);
+    expect(await main(["run", "--models", "m", "--base-url", "http://x"], io())).toBe(2);
+    expect(await main(["run", join(dir, "ei.json"), "--models", "m", "--base-url", "http://x"], io())).toBe(2);
+    expect(await main([...common(), "--max-pass-drop", "2"], io())).toBe(2);
+    expect(await main([...common(), "--concurrency", "0"], io())).toBe(2);
+    expect(await main([...common(), "--update-baseline"], io())).toBe(2);
+  });
+
+  it("--help tulostaa ohjeen ja palauttaa 0", async () => {
+    expect(await main(["--help"], io())).toBe(0);
+    expect(out).toMatch(/Poistumiskoodit/);
+  });
+
+  it("mallit ja osoite voi antaa ympäristömuuttujilla; API-avain luetaan --api-key-env-muuttujasta", async () => {
+    const llm = fakeLlm(() => "Helsinki Oslo");
+    const code = await main(["run", setPath, "--api-key-env", "OMA_AVAIN"], io(llm, { EVALKIT_MODELS: "x,y", EVALKIT_BASE_URL: "http://llm.local/v1", OMA_AVAIN: "salainen" }));
+    expect(code).toBe(0);
+    expect(llm.calls.map((c) => c.model)).toEqual(["x", "x", "y", "y"]);
+    expect(llm.calls[0].authorization).toBe("Bearer salainen");
+  });
+
+  it("raportti ja virheilmoitukset eivät sisällä API-avainta", async () => {
+    const llm = fakeLlm(() => ({ status: 401, body: "väärä avain" }));
+    await main(common(), io(llm, { LLM_API_KEY: "sk-ei-saa-nakya" }));
+    expect(out + err).not.toContain("sk-ei-saa-nakya");
+  });
+
+  it("käyttövirheen ilmoitus ei sisällä API-avainta", async () => {
+    // Puuttuva --models laukaisee ylätason virhepolun, vaikka avain on asetettu.
+    const code = await main(["run", setPath, "--base-url", "http://llm.local/v1"], io(undefined, { LLM_API_KEY: "sk-ei-saa-nakya" }));
+    expect(code).toBe(2);
+    expect(err.length).toBeGreaterThan(0);
+    expect(out + err).not.toContain("sk-ei-saa-nakya");
+  });
+
+  it("--json kirjoittaa koko raportin", async () => {
+    const jp = join(dir, "r.json");
+    await main([...common(), "--json", jp], io(fakeLlm(() => "Helsinki Oslo")));
+    expect(existsSync(jp)).toBe(true);
+    expect(JSON.parse(readFileSync(jp, "utf8")).cases).toHaveLength(2);
+  });
+});
