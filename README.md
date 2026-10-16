@@ -32,6 +32,14 @@ node dist/bin.js run examples/yleinen-fi.json \
 
 Commitoi `evalkit.baseline.json` repoon. Kun muutat promptia tai mallia ja tulos on tarkoituksella erilainen, päivitä baseline uudelleen `--update-baseline`-valinnalla ja katselmoi muutos.
 
+## Evalsetin tarkistus ilman kuluja
+
+```bash
+node dist/bin.js validate examples/yleinen-fi.json evals/*.json
+```
+
+`validate` lukee tiedostot, tarkistaa muodon (zod), kaksoisid:t ja virheelliset regex-lausekkeet eikä tee yhtään verkkokutsua. Se palauttaa 0, kun kaikki tiedostot kelpaavat, ja 2, jos yksikin ei kelpaa; kaikki tiedostot käydään läpi, joten saat kaikki virheet kerralla. Sopii CI:n ensimmäiseksi vaiheeksi.
+
 ## Evalsetin muoto (versio 1)
 
 ```json

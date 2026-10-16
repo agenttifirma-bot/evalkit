@@ -158,3 +158,51 @@ describe("cli: --cassette", () => {
     expect(await main(["run", setPath, "--models", "m", "--base-url", "http://x", "--cassette-mode", "record"], io(undefined))).toBe(2);
   });
 });
+
+describe("cli: validate", () => {
+  let dir: string;
+  let out: string;
+  let err: string;
+  const io = () => ({ env: {}, stdout: (s: string) => void (out += s), stderr: (s: string) => void (err += s) });
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "evalkit-val-"));
+    out = "";
+    err = "";
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+  const write = (name: string, data: unknown) => {
+    const p = join(dir, name);
+    writeFileSync(p, typeof data === "string" ? data : JSON.stringify(data));
+    return p;
+  };
+
+  it("kelvolliset tiedostot (versio 1 ja vanha muoto) -> 0 ja tapausmäärä", async () => {
+    const a = write("a.json", { version: 1, cases: [{ id: "x", prompt: "p" }] });
+    const b = write("b.json", [{ id: "y", prompt: "p", expectedContains: "k" }, { id: "z", prompt: "q" }]);
+    expect(await main(["validate", a, b], io())).toBe(0);
+    expect(out).toMatch(/OK .*a\.json: 1 tapausta/);
+    expect(out).toMatch(/OK .*b\.json: 2 tapausta/);
+  });
+
+  it("yksikin virheellinen tiedosto -> 2, kaikki tiedostot käydään silti läpi", async () => {
+    const good = write("good.json", { version: 1, cases: [{ id: "x", prompt: "p" }] });
+    const dup = write("dup.json", { version: 1, cases: [{ id: "a", prompt: "p" }, { id: "a", prompt: "q" }] });
+    const broken = write("broken.json", "{ ei json");
+    expect(await main(["validate", dup, good, broken], io())).toBe(2);
+    expect(out).toMatch(/OK .*good\.json/);
+    expect(err).toMatch(/esiintyy useammin/);
+    expect(err).toMatch(/ei ole luettavissa|ei ole kelvollista JSON/);
+  });
+
+  it("puuttuva tiedosto -> 2; ilman tiedostoja -> 2", async () => {
+    expect(await main(["validate", join(dir, "ei-ole.json")], io())).toBe(2);
+    expect(await main(["validate"], io())).toBe(2);
+    expect(err).toMatch(/vähintään yhden evalset-tiedoston/);
+  });
+
+  it("validate ei kutsu verkkoa (ei fetch-injektiota, ei mallivalintoja tarvita)", async () => {
+    const a = write("a.json", { version: 1, cases: [{ id: "x", prompt: "p", expect: { regex: "^a" } }] });
+    expect(await main(["validate", a], io())).toBe(0);
+  });
+});

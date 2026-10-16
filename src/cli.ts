@@ -17,6 +17,7 @@ export interface CliIo {
 
 const USAGE = `Käyttö:
   evalkit run <evalset.json> --models a,b --base-url <url> [valinnat]
+  evalkit validate <evalset.json> [lisää tiedostoja]   Tarkistaa tiedostot ilman verkkoa ja kuluja
 
 Valinnat:
   --models a,b            Mallit pilkulla eroteltuna (tai EVALKIT_MODELS)
@@ -37,7 +38,9 @@ Poistumiskoodit: 0 = ok, 1 = regressio tai epäonnistuneita tapauksia, 2 = virhe
 `;
 
 interface Args {
-  set?: string;
+  command: "run" | "validate";
+  /** run: evalset-tiedosto (ensimmäinen); validate: kaikki tiedostot. */
+  files: string[];
   flags: Record<string, string | true>;
 }
 
@@ -58,8 +61,9 @@ function parseArgs(argv: string[]): Args {
       }
     } else positional.push(a);
   }
-  if (positional[0] !== "run") throw new Error(positional[0] ? `Tuntematon komento '${positional[0]}'` : "Komento puuttuu");
-  return { set: positional[1], flags };
+  const command = positional[0];
+  if (command !== "run" && command !== "validate") throw new Error(command ? `Tuntematon komento '${command}'` : "Komento puuttuu");
+  return { command, files: positional.slice(1), flags };
 }
 
 function intFlag(flags: Args["flags"], name: string): number | undefined {
@@ -95,6 +99,24 @@ function formatComparison(cmp: Comparison): string {
   return lines.join("\n");
 }
 
+function validateFiles(files: string[], io: CliIo): number {
+  if (files.length === 0) {
+    io.stderr(`Virhe: validate tarvitsee vähintään yhden evalset-tiedoston\n\n${USAGE}`);
+    return EXIT_USAGE;
+  }
+  let bad = 0;
+  for (const f of files) {
+    try {
+      const set = loadEvalSet(f);
+      io.stdout(`OK ${f}: ${set.cases.length} tapausta\n`);
+    } catch (err) {
+      bad++;
+      io.stderr(`${err instanceof Error ? err.message : String(err)}\n`);
+    }
+  }
+  return bad === 0 ? EXIT_OK : EXIT_USAGE;
+}
+
 async function cassetteFetchFor(path: string, mode: string | undefined, realFetch: typeof fetch | undefined): Promise<typeof fetch> {
   let mod: typeof import("llm-cassette");
   try {
@@ -119,8 +141,11 @@ export async function main(argv: string[], io: CliIo): Promise<number> {
     return EXIT_USAGE;
   }
 
+  if (args.command === "validate") return validateFiles(args.files, io);
+
   try {
-    if (!args.set) throw new Error("Evalset-tiedosto puuttuu");
+    const setFile = args.files[0];
+    if (!setFile) throw new Error("Evalset-tiedosto puuttuu");
     const modelsRaw = (args.flags["models"] as string | undefined) ?? io.env.EVALKIT_MODELS;
     const baseUrl = (args.flags["base-url"] as string | undefined) ?? io.env.EVALKIT_BASE_URL;
     if (!modelsRaw) throw new Error("Mallit puuttuvat (--models tai EVALKIT_MODELS)");
@@ -131,7 +156,7 @@ export async function main(argv: string[], io: CliIo): Promise<number> {
     const maxPassDrop = maxPassDropRaw === undefined ? 0 : Number(maxPassDropRaw);
     if (typeof maxPassDropRaw === "string" && !(maxPassDrop >= 0 && maxPassDrop <= 1)) throw new Error("--max-pass-drop täytyy olla luku väliltä 0-1");
 
-    const set = loadEvalSet(args.set);
+    const set = loadEvalSet(setFile);
     const baselinePath = args.flags["baseline"] as string | undefined;
     const update = args.flags["update-baseline"] === true;
     if (update && !baselinePath) throw new Error("--update-baseline tarvitsee --baseline <tiedosto>");
