@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "results": {
+    "demo::lasku-01": true,
+    "demo::yleinen-01": true,
+    "demo::yleinen-02": true
+  }
+}

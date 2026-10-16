@@ -8,7 +8,7 @@ Aja sama prompt-sarja usealla mallilla ja estä regressiot CI:ssä. Evalkit vert
 
 **Teknologiat:** TypeScript, Node.js 22/24, zod, vitest.
 
-> **Tila:** Ensimmäinen versio. Ydin (skeema, ajo, ehdot, baseline, CLI ja `--cassette`) on testattu mallia kutsumatta. GitHub Action on seuraava vaihe.
+> **Tila:** Ensimmäinen versio. Ydin (skeema, ajo, ehdot, baseline, CLI ja `--cassette`) on testattu mallia kutsumatta. GitHub Action (`action.yml`) on mukana.
 
 ## Pika-aloitus
 
@@ -154,11 +154,63 @@ const report = await runEval({
 });
 ```
 
+## GitHub Action
+
+Evalkit ajetaan toisen repon CI:ssä yhdellä askeleella. Action asentaa ja kääntää evalkitin itse, joten sinun ei tarvitse julkaista tai asentaa mitään. **Kiinnitä versio commit-tunnisteeseen** (ei haaraan), jotta ulkopuolinen muutos ei pääse työnkulkuusi:
+
+```yaml
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Ilmainen ja nopea: tarkistaa tiedostojen muodon ilman verkkoa
+      - uses: tonyweckstrom1987/evalkit@<commit-sha>
+        with:
+          mode: validate
+          eval-set: evals/yleinen.json
+
+      # Toista tallennetut vastaukset (ei kuluja, ei avainta)
+      - uses: tonyweckstrom1987/evalkit@<commit-sha>
+        with:
+          eval-set: evals/yleinen.json
+          models: openrouter/deepseek/deepseek-v4.1-flash
+          base-url: https://litellm.example/v1
+          baseline: evals/evalkit.baseline.json
+          cassette: evals/yleinen.cassette.json
+```
+
+Oikeilla mallikutsuilla (maksaa) avain annetaan secretistä askeleen `env`-lohkossa; sitä ei koskaan anneta syötteenä eikä tulosteta:
+
+```yaml
+      - uses: tonyweckstrom1987/evalkit@<commit-sha>
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+        with:
+          eval-set: evals/yleinen.json
+          models: m1,m2
+          base-url: https://litellm.example/v1
+          baseline: evals/evalkit.baseline.json
+```
+
+| Syöte | Merkitys |
+| --- | --- |
+| `eval-set` | Evalset-tiedosto (`validate`-tilassa useita välilyönnillä erotettuna). Pakollinen. |
+| `mode` | `run` (oletus) tai `validate`. |
+| `models`, `base-url` | Pakolliset `run`-tilassa. |
+| `baseline`, `max-pass-drop` | Regressioportti (ks. yllä). |
+| `cassette`, `cassette-mode` | Toista tai tallenna vastaukset; CI:ssä jätä `cassette-mode` pois (oletus `replay`). |
+| `judge-model`, `max-tokens`, `concurrency`, `timeout-ms` | Kuten CLI:n valinnat. |
+| `api-key-env` | Avaimen ympäristömuuttujan nimi (oletus `LLM_API_KEY`). |
+| `json-report` | Kirjoita raportti JSON-tiedostoon. Raportti sisältää mallien vastaukset; älä commitoi sitä. |
+
+Syötteet välitetään kuoreen ympäristömuuttujina eikä komentoriville, joten arvoissa olevat erikoismerkit eivät suorita komentoja. Action ei koskaan päivitä baselinea: hyväksy muutokset paikallisesti `--update-baseline`-valinnalla ja katselmoi baseline-tiedoston muutos PR:ssä. Action käyttää Node 24:ää.
+
 ## Rajoitukset
 
 - Tuomarimalli on vain yhden luvun arvio (1–5), eikä se korvaa ihmisen tarkistusta. Käytä sitä täydentävänä mittarina.
 - Striimausta ei tueta, ja vain tekstivastauksia arvioidaan.
-- Ei vielä valmista GitHub Actionia: käytä CLI:tä työnkulun `run`-vaiheessa.
 
 ## Kehitys
 
