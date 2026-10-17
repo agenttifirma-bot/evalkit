@@ -2,6 +2,7 @@ import { writeFileSync } from "node:fs";
 import { compare, readBaseline, toBaseline, writeBaseline, type Comparison } from "./baseline.js";
 import { runEval, type Report } from "./run.js";
 import { loadEvalSet } from "./schema.js";
+import { VERSIO } from "./versio.js";
 
 export const EXIT_OK = 0;
 export const EXIT_GATE_FAILED = 1;
@@ -18,6 +19,7 @@ export interface CliIo {
 const USAGE = `Käyttö:
   evalkit run <evalset.json> --models a,b --base-url <url> [valinnat]
   evalkit validate <evalset.json> [lisää tiedostoja]   Tarkistaa tiedostot ilman verkkoa ja kuluja
+  evalkit --version
 
 Valinnat:
   --models a,b            Mallit pilkulla eroteltuna (tai EVALKIT_MODELS)
@@ -30,7 +32,7 @@ Valinnat:
   --concurrency <n>       Samanaikaiset kutsut (oletus 4)
   --timeout-ms <ms>       Aikakatkaisu per kutsu (oletus 60000)
   --max-tokens <n>        max_tokens per kutsu (oletus 1024, katto 4096)
-  --cassette <tiedosto>   Toista/tallenna mallivastaukset llm-cassette-tiedostosta (vaatii llm-cassette-paketin)
+  --cassette <tiedosto>   Toista/tallenna mallivastaukset llm-cassette-tiedostosta (vaatii paketin @tonyweckstrom/llm-cassette)
   --cassette-mode <tila>  replay (oletus, ei koskaan verkkoa), record tai auto
   --json <tiedosto>       Kirjoita koko raportti JSON-tiedostoon
 
@@ -118,11 +120,11 @@ function validateFiles(files: string[], io: CliIo): number {
 }
 
 async function cassetteFetchFor(path: string, mode: string | undefined, realFetch: typeof fetch | undefined): Promise<typeof fetch> {
-  let mod: typeof import("llm-cassette");
+  let mod: typeof import("@tonyweckstrom/llm-cassette");
   try {
-    mod = await import("llm-cassette");
+    mod = await import("@tonyweckstrom/llm-cassette");
   } catch {
-    throw new Error("--cassette vaatii llm-cassette-paketin: npm install --save-dev github:tonyweckstrom1987/llm-cassette");
+    throw new Error("--cassette vaatii paketin @tonyweckstrom/llm-cassette: npm install --save-dev @tonyweckstrom/llm-cassette");
   }
   return mod.cassetteFetch({ path, mode: (mode as "replay" | "record" | "auto" | undefined) ?? "replay", fetch: realFetch });
 }
@@ -131,6 +133,10 @@ async function cassetteFetchFor(path: string, mode: string | undefined, realFetc
 export async function main(argv: string[], io: CliIo): Promise<number> {
   let args: Args;
   try {
+    if (argv[0] === "--version" || argv[0] === "-v") {
+      io.stdout(`${VERSIO}\n`);
+      return EXIT_OK;
+    }
     if (argv.includes("--help") || argv.length === 0) {
       io.stdout(USAGE);
       return argv.length === 0 ? EXIT_USAGE : EXIT_OK;

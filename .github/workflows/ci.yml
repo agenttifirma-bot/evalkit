@@ -38,6 +38,42 @@ jobs:
       - name: Audit
         run: npm audit --omit=dev --audit-level=high
 
+  paketti:
+    # Testaa sen, mitä käyttäjä oikeasti saa npm:stä: pakkaa, asenna puhtaaseen kansioon, aja.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Asenna, käännä ja pakkaa
+        run: |
+          npm ci
+          npm pack --pack-destination "$RUNNER_TEMP"
+
+      - name: Asenna paketti puhtaaseen kansioon ja aja se
+        run: |
+          mkdir "$RUNNER_TEMP/asennus" && cd "$RUNNER_TEMP/asennus"
+          npm init -y > /dev/null
+          npm install "$RUNNER_TEMP"/tonyweckstrom-evalkit-*.tgz @tonyweckstrom/llm-cassette
+          cp "$GITHUB_WORKSPACE/examples/yleinen-fi.json" .
+          cp "$GITHUB_WORKSPACE"/test/fixtures/action/*.json .
+          npx evalkit --version
+          npx evalkit validate yleinen-fi.json
+          # Baseline täsmää: ajo menee läpi
+          npx evalkit run yleinen-fi.json --models demo --base-url https://litellm.example/v1 \
+            --baseline baseline-ok.json --cassette yleinen.cassette.json
+          # Regressio: ajon pitää kaatua poistumiskoodilla 1
+          set +e
+          npx evalkit run yleinen-fi.json --models demo --base-url https://litellm.example/v1 \
+            --baseline baseline-regressio.json --cassette yleinen.cassette.json
+          koodi=$?
+          set -e
+          [ "$koodi" -eq 1 ] || { echo "Odotettiin poistumiskoodia 1, saatiin $koodi" >&2; exit 1; }
+
   action:
     runs-on: ubuntu-latest
     steps:

@@ -8,29 +8,67 @@ Aja sama prompt-sarja usealla mallilla ja estä regressiot CI:ssä. Evalkit vert
 
 **Teknologiat:** TypeScript, Node.js 22/24, zod, vitest.
 
-> **Tila:** Ensimmäinen versio. Ydin (skeema, ajo, ehdot, baseline, CLI ja `--cassette`) on testattu mallia kutsumatta. GitHub Action (`action.yml`) on mukana.
+> **Tila:** Versio 0.3.0, julkaistu npm:ään nimellä `@tonyweckstrom/evalkit`. Ydin (skeema, ajo, ehdot, baseline, CLI ja `--cassette`) on testattu mallia kutsumatta. GitHub Action (`action.yml`) on mukana.
+
+## Asennus
+
+Tarvitset Node.js 22:n tai 24:n. Ei asennusta, kokeile suoraan:
+
+```bash
+npx @tonyweckstrom/evalkit --version
+```
+
+Tai lisää projektiin:
+
+```bash
+npm install --save-dev @tonyweckstrom/evalkit
+npx evalkit --help
+```
 
 ## Pika-aloitus
 
 ```bash
-npm ci
-npm run build
 export LLM_API_KEY=...   # ei tarvita, jos rajapinta ei vaadi avainta
 
 # 1) Luo baseline hyväksytystä tilasta
-node dist/bin.js run examples/yleinen-fi.json \
+npx @tonyweckstrom/evalkit run examples/yleinen-fi.json \
   --models openrouter/deepseek/deepseek-v4.1-flash \
   --base-url https://litellm.local/v1 \
   --baseline evalkit.baseline.json --update-baseline
 
 # 2) Aja CI:ssä: kaatuu vain regressioon
-node dist/bin.js run examples/yleinen-fi.json \
+npx @tonyweckstrom/evalkit run examples/yleinen-fi.json \
   --models openrouter/deepseek/deepseek-v4.1-flash \
   --base-url https://litellm.local/v1 \
   --baseline evalkit.baseline.json
 ```
 
 Commitoi `evalkit.baseline.json` repoon. Kun muutat promptia tai mallia ja tulos on tarkoituksella erilainen, päivitä baseline uudelleen `--update-baseline`-valinnalla ja katselmoi muutos.
+
+## Esimerkkituloste
+
+Alla on repon omat testitallenteet (`test/fixtures/action/`) ajettuna `--cassette`-toistolla. Vastaukset ovat valemallin, ei oikean mallin, mutta tuloste on sellaisenaan evalkitin tulostetta. Ensin baseline täsmää, jolloin ajo menee läpi (poistumiskoodi 0), vaikka yksi tapaus kaatuu: se kaatui jo baselinessa.
+
+```text
+$ npx evalkit run examples/yleinen-fi.json --models demo --base-url https://litellm.example/v1 \
+    --baseline test/fixtures/action/baseline-ok.json --cassette test/fixtures/action/yleinen.cassette.json
+Evalkit: yleinen-fi
+  demo: läpäisi 2/3 (67 %), virheitä 0
+Epäonnistuneet tapaukset:
+  - demo / lasku-01: regex: vastaus ei täsmää lausekkeeseen /^\s*42\s*\.?\s*$/
+Vertailu baselineen:
+  regressioita: 0, korjaantuneita: 0, uusia: 0, puuttuvia: 0
+```
+
+Kun baselinessa sama tapaus oli läpäissyt, sama tulos on regressio ja ajo kaatuu (poistumiskoodi 1):
+
+```text
+Vertailu baselineen:
+  regressioita: 1, korjaantuneita: 0, uusia: 0, puuttuvia: 0
+  REGRESSIO demo::lasku-01: regex: vastaus ei täsmää lausekkeeseen /^\s*42\s*\.?\s*$/
+  demo: läpäisyprosentti laski 33 %-yksikköä
+```
+
 
 ## Evalsetin tarkistus ilman kuluja
 
@@ -112,7 +150,7 @@ Ilman `--baseline`-valintaa kaikkien arvioitavien tapausten pitää läpäistä.
 | `--concurrency <n>` | Samanaikaiset kutsut (oletus 4). |
 | `--timeout-ms <ms>` | Aikakatkaisu per kutsu (oletus 60000). |
 | `--max-tokens <n>` | `max_tokens` per kutsu (oletus 1024, katto 4096). |
-| `--cassette <tiedosto>` | Toista tai tallenna mallivastaukset [llm-cassette](https://github.com/tonyweckstrom1987/llm-cassette)-tiedostoon (ks. alla). Vaatii llm-cassette-paketin. |
+| `--cassette <tiedosto>` | Toista tai tallenna mallivastaukset [llm-cassette](https://github.com/tonyweckstrom1987/llm-cassette)-tiedostoon (ks. alla). Vaatii paketin `@tonyweckstrom/llm-cassette`. |
 | `--cassette-mode <tila>` | `replay` (oletus: ei koskaan verkkoa), `record` tai `auto`. |
 | `--json <tiedosto>` | Kirjoita koko raportti JSON-tiedostoon. |
 
@@ -127,7 +165,7 @@ Ilman `--baseline`-valintaa kaikkien arvioitavien tapausten pitää läpäistä.
 Oikeat mallikutsut maksavat, ja vastaukset vaihtelevat ajosta toiseen. Tallenna vastaukset kerran [llm-cassette](https://github.com/tonyweckstrom1987/llm-cassette)-tiedostoon ja toista ne CI:ssä:
 
 ```bash
-npm install --save-dev github:tonyweckstrom1987/llm-cassette
+npm install --save-dev @tonyweckstrom/llm-cassette
 
 # Kerran paikallisesti, oikealla avaimella: tallentaa vastaukset
 node dist/bin.js run examples/yleinen-fi.json --models m --base-url https://litellm.local/v1 \
@@ -143,8 +181,8 @@ Commitoi cassette-tiedosto ja baseline repoon. Jos prompti, malli tai tehtävä 
 Kirjastona `runEval` ottaa `fetch`-asetuksen:
 
 ```ts
-import { runEval, loadEvalSet } from "evalkit";
-import { cassetteFetch } from "llm-cassette";
+import { runEval, loadEvalSet } from "@tonyweckstrom/evalkit";
+import { cassetteFetch } from "@tonyweckstrom/llm-cassette";
 
 const report = await runEval({
   set: loadEvalSet("examples/yleinen-fi.json"),
@@ -211,6 +249,16 @@ Syötteet välitetään kuoreen ympäristömuuttujina eikä komentoriville, jote
 
 - Tuomarimalli on vain yhden luvun arvio (1–5), eikä se korvaa ihmisen tarkistusta. Käytä sitä täydentävänä mittarina.
 - Striimausta ei tueta, ja vain tekstivastauksia arvioidaan.
+
+## Vaihtoehtoja ja miksi tämä
+
+Evalkit ei ole ensimmäinen eval-työkalu, ja suurempi ja kypsempi vaihtoehto on olemassa. Valitse sen mukaan, mitä tarvitset:
+
+- **[promptfoo](https://github.com/promptfoo/promptfoo)** on laajin avoimen lähdekoodin vaihtoehto: paljon valmiita arviointitapoja, monta mallitarjoajaa, vertailunäkymä ja oma GitHub Action. Jos tarvitset punaisen tiimin testejä, web-käyttöliittymän tai laajan ominaisuusvalikoiman, käytä sitä.
+- **[DeepEval](https://github.com/confident-ai/deepeval)** ja **[Inspect](https://inspect.aisi.org.uk/)** ovat Python-työkaluja. Ne sopivat, jos projektisi on Pythonia ja haluat arviointeja pytestin tai tutkimustyön tapaan.
+- Evalkit on tarkoituksella pieni (noin 700 riviä, yksi ajonaikainen riippuvuus `zod`) ja keskittyy yhteen kysymykseen: **meneekö jokin aiemmin toiminut tapaus nyt rikki?** Baseline-vertailu on ydin eikä lisäominaisuus, ja vain regressio kaataa CI-ajon. Lisäksi evalset on yksinkertainen JSON-tiedosto, jonka muoto tarkistetaan ilman verkkoa (`validate`), kutsumäärälle on kova katto koodissa, ja yhteensopivuus [llm-cassetten](https://github.com/tonyweckstrom1987/llm-cassette) kanssa antaa ilmaiset ja toistettavat CI-ajot.
+
+Tämä vertailu perustuu hakuun ja työkalujen omiin kuvauksiin, ei kaikkien ominaisuuksien kokeiluun. Tarkista nykyinen tilanne niiden omilta sivuilta.
 
 ## Kehitys
 
