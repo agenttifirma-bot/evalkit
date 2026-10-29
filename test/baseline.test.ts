@@ -56,6 +56,74 @@ describe("baseline", () => {
     expect(c.passRateDrop).toEqual({ a: 0, b: 1 });
   });
 
+  it("keyOf muodostaa avaimen malli::tapaus", async () => {
+    const { keyOf } = await import("../src/baseline.js");
+    expect(keyOf("gpt", "a-01")).toBe("gpt::a-01");
+  });
+
+  it("tapaukset ilman odotuksia (passed null) ohitetaan vertailussa, eivätkä ne ole uusia tai puuttuvia", () => {
+    const base = { version: 1 as const, results: { "m::a": true } };
+    const c = compare(report([row("m", "a", true), row("m", "ei-odotuksia", null)]), base);
+    expect(c.newCases).toEqual([]);
+    expect(c.missing).toEqual([]);
+    expect(c.ok).toBe(true);
+  });
+
+  it("malli, jota ei ajettu, näkyy puuttuvana eikä kaada porttia", () => {
+    const base = { version: 1 as const, results: { "a::x": true, "b::x": true } };
+    const c = compare(report([row("a", "x", true)]), base);
+    expect(c.missing).toEqual(["b::x"]);
+    expect(c.passRateDrop).toEqual({ a: 0 });
+    expect(c.ok).toBe(true);
+  });
+
+  it("ilman yhteisiä tapauksia passRateDrop on tyhjä ja portti läpäisee myös maxPassDropilla", () => {
+    const base = { version: 1 as const, results: { "m::vanha": true } };
+    const c = compare(report([row("m", "uusi", false)]), base, 0.1);
+    expect(c.passRateDrop).toEqual({});
+    expect(c.ok).toBe(true);
+  });
+
+  it("maxPassDrop > 0: parantuminen ei kasvata laskua (negatiivinen drop) ja regressio sallitaan, jos toinen tapaus korjaantui", () => {
+    const base = { version: 1 as const, results: { "m::a": true, "m::b": false } };
+    const c = compare(report([row("m", "a", false), row("m", "b", true)]), base, 0.01);
+    expect(c.regressions.map((r) => r.key)).toEqual(["m::a"]);
+    expect(c.passRateDrop.m).toBe(0);
+    expect(c.ok).toBe(true);
+    expect(compare(report([row("m", "a", false), row("m", "b", true)]), base).ok).toBe(false);
+  });
+
+  it("regression syy on ensimmäinen virheilmoitus, tai 'kaatui' jos sitä ei ole", () => {
+    const base = { version: 1 as const, results: { "m::a": true } };
+    const bare: CaseResult = { ...row("m", "a", false), failures: [] };
+    expect(compare(report([bare]), base).regressions[0].reason).toBe("kaatui");
+  });
+
+  it("writeBaseline kirjoittaa version 1, rivinvaihdon loppuun ja luo puuttuvat hakemistot", () => {
+    const dir = mkdtempSync(join(tmpdir(), "evalkit-w-"));
+    try {
+      const p = join(dir, "a", "b", "base.json");
+      writeBaseline(p, { version: 1, results: { "m::a": true } });
+      const text = readFileSync(p, "utf8");
+      expect(text.endsWith("\n")).toBe(true);
+      expect(JSON.parse(text)).toEqual({ version: 1, results: { "m::a": true } });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("readBaseline hylkää rakenteen, jossa results puuttuu tai on null", () => {
+    const dir = mkdtempSync(join(tmpdir(), "evalkit-r-"));
+    try {
+      writeFileSync(join(dir, "a.json"), JSON.stringify({ version: 1 }));
+      writeFileSync(join(dir, "b.json"), JSON.stringify({ version: 1, results: null }));
+      writeFileSync(join(dir, "c.json"), "null");
+      for (const f of ["a.json", "b.json", "c.json"]) expect(() => readBaseline(join(dir, f))).toThrow(/ei ole tuettu/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("kirjoitus ja luku: avaimet järjestetään, puuttuva tiedosto antaa null, vieras muoto virheen", () => {
     const dir = mkdtempSync(join(tmpdir(), "evalkit-b-"));
     try {

@@ -29,4 +29,35 @@ describe("evaluate", () => {
     expect(r.passed).toBe(false);
     expect(r.failures).toHaveLength(3);
   });
+  it("onnistunut arviointi palauttaa tyhjän failures-listan", () => {
+    expect(evaluate({ contains: "a", notContains: ["z"], regex: "^a", minJudgeScore: 3 }, "abc", 4)).toEqual({ passed: true, failures: [] });
+  });
+  it("contains-ehdon kirjainkoko ei vaikuta myöskään ehdon puolella ja virheviesti nimeää ehdon", () => {
+    expect(evaluate({ contains: "HELSINKI" }, "helsinki", null).passed).toBe(true);
+    expect(evaluate({ contains: "Tukholma" }, "Helsinki", null).failures).toEqual(["contains: vastaus ei sisällä 'Tukholma'"]);
+  });
+  it("notContains raportoi jokaisen kielletyn sanan erikseen ja vertaa kirjainkoosta riippumatta", () => {
+    const r = evaluate({ notContains: ["EN TIEDÄ", "ehkä", "ok"] }, "En tiedä, ehkä.", null);
+    expect(r.passed).toBe(false);
+    expect(r.failures).toHaveLength(2);
+    expect(r.failures[0]).toMatch(/'EN TIEDÄ'/);
+    expect(r.failures[1]).toMatch(/'ehkä'/);
+  });
+  it("notContains tyhjällä listalla ja tyhjällä vastauksella läpäisee", () => {
+    expect(evaluate({ notContains: [] }, "mitä vain", null).passed).toBe(true);
+    expect(evaluate({ notContains: ["x"] }, "", null).passed).toBe(true);
+  });
+  it("regex on kirjainkokoriippuvainen (tekstiä ei muunneta pieniksi) ja virheviesti sisältää lausekkeen", () => {
+    expect(evaluate({ regex: "^abc" }, "ABC", null).passed).toBe(false);
+    expect(evaluate({ regex: "^abc" }, "abc", null).passed).toBe(true);
+    expect(evaluate({ regex: "^z" }, "b", null).failures).toEqual(["regex: vastaus ei täsmää lausekkeeseen /^z/"]);
+  });
+  it("minJudgeScore: virheviestit erottavat puuttuvan pisteen ja liian matalan pisteen", () => {
+    expect(evaluate({ minJudgeScore: 4 }, "x", null).failures).toEqual(["minJudgeScore: tuomaripistettä ei saatu"]);
+    expect(evaluate({ minJudgeScore: 4 }, "x", 3.5).failures).toEqual(["minJudgeScore: 3.5 < 4"]);
+  });
+  it("tuomaripiste ei vaikuta tulokseen, jos minJudgeScore-ehtoa ei ole", () => {
+    expect(evaluate({ contains: "a" }, "a", 1).passed).toBe(true);
+    expect(evaluate({ contains: "a" }, "a", null).passed).toBe(true);
+  });
 });
