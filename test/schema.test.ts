@@ -54,6 +54,54 @@ describe("evalset-skeema", () => {
     }
   });
 
+  it("loadEvalSet lukee kelvollisen version 1 -tiedoston ja vanhan taulukkomuodon levyltä", () => {
+    const dir = mkdtempSync(join(tmpdir(), "evalkit-ok-"));
+    try {
+      writeFileSync(join(dir, "v1.json"), JSON.stringify({ version: 1, name: "n", cases: [{ id: "a", prompt: "p" }] }));
+      writeFileSync(join(dir, "vanha.json"), JSON.stringify([{ id: "b", prompt: "q", expectedContains: "k" }]));
+      expect(loadEvalSet(join(dir, "v1.json")).name).toBe("n");
+      expect(loadEvalSet(join(dir, "vanha.json")).cases[0].expect).toEqual({ contains: "k" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("virheilmoitus nimeää lähteen ja virheellisen kentän polun", () => {
+    expect(() => parseEvalSet({ version: 1, cases: [{ id: "", prompt: "p" }] }, "oma.json")).toThrow(/oma\.json.*cases\.0\.id/s);
+    expect(() => parseEvalSet({ version: 1, cases: [{ id: "a" }] }, "oma.json")).toThrow(/cases\.0\.prompt/);
+  });
+
+  it("hylkää tyhjät ehtomerkkijonot ja tyhjän notContains-alkion", () => {
+    expect(() => parseEvalSet({ version: 1, cases: [{ id: "a", prompt: "p", expect: { contains: "" } }] })).toThrow();
+    expect(() => parseEvalSet({ version: 1, cases: [{ id: "a", prompt: "p", expect: { notContains: [""] } }] })).toThrow();
+    expect(() => parseEvalSet({ version: 1, cases: [{ id: "a", prompt: "p", expect: { regex: "" } }] })).toThrow();
+  });
+
+  it("hylkää kaksoisid:n myös vanhassa taulukkomuodossa ja virheellisen regexin nimeää tapauksen", () => {
+    expect(() => parseEvalSet([{ id: "a", prompt: "p" }, { id: "a", prompt: "q" }])).toThrow(/esiintyy useammin/);
+    expect(() => parseEvalSet({ version: 1, cases: [{ id: "tapaus-x", prompt: "p", expect: { regex: "[" } }] })).toThrow(/cases\.tapaus-x\.expect\.regex/);
+  });
+
+  it("raportoi kaikki ristiriidat kerralla", () => {
+    let msg = "";
+    try {
+      parseEvalSet({ version: 1, cases: [{ id: "a", prompt: "p", expect: { regex: "(" } }, { id: "a", prompt: "q" }] });
+    } catch (e) {
+      msg = (e as Error).message;
+    }
+    expect(msg).toMatch(/esiintyy useammin/);
+    expect(msg).toMatch(/virheellinen lauseke/);
+  });
+
+  it("minJudgeScore: rajat 1 ja 5 sekä desimaali hyväksytään", () => {
+    for (const v of [1, 2.5, 5]) expect(parseEvalSet({ version: 1, cases: [{ id: "a", prompt: "p", expect: { minJudgeScore: v } }] }).cases[0].expect?.minJudgeScore).toBe(v);
+  });
+
+  it("vanha muoto: tyhjä expectedContains tai category hylätään", () => {
+    expect(() => parseEvalSet([{ id: "a", prompt: "p", expectedContains: "" }])).toThrow();
+    expect(() => parseEvalSet([{ id: "a", prompt: "p", category: "" }])).toThrow();
+  });
+
   it("groupOf: tagi ensin, muuten id:n etuliite", () => {
     expect(groupOf({ id: "yleinen-01", prompt: "p", tags: ["tieto"] })).toBe("tieto");
     expect(groupOf({ id: "yleinen-01", prompt: "p" })).toBe("yleinen");

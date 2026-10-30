@@ -102,6 +102,57 @@ describe("runEval", () => {
     ).rejects.toThrow(/4 mallikutsua/);
   });
 
+  it("hylkää tyhjän mallilistan ennen kutsuja", async () => {
+    const never = fakeLlm(() => "ok");
+    await expect(runEval({ set: set([{ id: "a", prompt: "p" }]), models: [], baseUrl, fetch: never.fetch })).rejects.toThrow(/Vähintään yksi malli/);
+    expect(never.calls).toHaveLength(0);
+  });
+
+  it("raportti sisältää nimen, mallit, tuomarimallin, ryhmän ja yhteenvedon laskurit", async () => {
+    const l = fakeLlm((c) => (c.model === "t" ? "4.5" : "Helsinki"));
+    const r = await runEval({
+      set: parseEvalSet({ version: 1, name: "nimi", cases: [{ id: "yleinen-01", prompt: "p", expect: { contains: "Helsinki" } }, { id: "b", prompt: "q", tags: ["ryhma"] }] }),
+      models: ["m"],
+      baseUrl,
+      fetch: l.fetch,
+      judgeModel: "t",
+    });
+    expect(r.name).toBe("nimi");
+    expect(r.models).toEqual(["m"]);
+    expect(r.judgeModel).toBe("t");
+    expect(r.cases.map((c) => c.group)).toEqual(["yleinen", "ryhma"]);
+    expect(r.perModel[0]).toEqual({ model: "m", total: 2, evaluated: 1, passed: 1, errors: 0, passRate: 1 });
+    expect(l.calls).toHaveLength(2); // tuomaria ei kutsuta tapauksille ilman minJudgeScorea
+  });
+
+  it("tuomaripiste luetaan desimaalina ja tulkitsematon vastaus antaa null", async () => {
+    const dec = fakeLlm((c) => (c.model === "t" ? "3.5" : "vastaus"));
+    const r1 = await runEval({ set: set([{ id: "a", prompt: "p", expect: { minJudgeScore: 3 } }]), models: ["m"], baseUrl, fetch: dec.fetch, judgeModel: "t" });
+    expect(r1.cases[0].judgeScore).toBe(3.5);
+    const junk = fakeLlm((c) => (c.model === "t" ? "ei numeroa" : "vastaus"));
+    const r2 = await runEval({ set: set([{ id: "a", prompt: "p", expect: { minJudgeScore: 3 } }]), models: ["m"], baseUrl, fetch: junk.fetch, judgeModel: "t" });
+    expect(r2.cases[0].judgeScore).toBeNull();
+    expect(r2.cases[0].passed).toBe(false);
+  });
+
+  it("välittää apiKeyn, maxTokensin ja tuomarille 16 tokenin rajan", async () => {
+    const l = fakeLlm((c) => (c.model === "t" ? "5" : "vastaus"));
+    await runEval({ set: set([{ id: "a", prompt: "p", expect: { minJudgeScore: 4 } }]), models: ["m"], baseUrl, fetch: l.fetch, judgeModel: "t", apiKey: "avain", maxTokens: 200 });
+    expect(l.calls[0].max_tokens).toBe(200);
+    expect(l.calls[0].authorization).toBe("Bearer avain");
+    expect(l.calls[1].max_tokens).toBe(16);
+    expect(l.calls[1].authorization).toBe("Bearer avain");
+  });
+
+  it("virheellinen maxTokens kaataa jokaisen tapauksen virheeksi eikä tee verkkokutsuja", async () => {
+    const never = fakeLlm(() => "ok");
+    const r = await runEval({ set: set([{ id: "a", prompt: "p", expect: { contains: "x" } }]), models: ["m"], baseUrl, fetch: never.fetch, maxTokens: 99999 });
+    expect(never.calls).toHaveLength(0);
+    expect(r.cases[0].passed).toBe(false);
+    expect(r.cases[0].failures[0]).toMatch(/^virhe: .*maxTokens/);
+    expect(r.cases[0].response).toBe("");
+  });
+
   it("tuomarin virhe ei kaada ajoa: piste puuttuu ja minJudgeScore-tapaus kaatuu", async () => {
     const l = fakeLlm((c) => (c.model === "tuomari" ? { status: 500, body: "x" } : "vastaus"));
     const r = await runEval({ set: set([{ id: "a", prompt: "p", expect: { minJudgeScore: 4 } }]), models: ["m"], baseUrl, fetch: l.fetch, judgeModel: "tuomari" });
