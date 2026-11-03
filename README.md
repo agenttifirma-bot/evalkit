@@ -70,6 +70,8 @@ Vertailu baselineen:
 ```
 
 
+Kolmen minuutin ohje ennen/jälkeen-esimerkkeineen ja GitHub Action -pätkineen: [docs/demo.md](docs/demo.md).
+
 ## Evalsetin tarkistus ilman kuluja
 
 ```bash

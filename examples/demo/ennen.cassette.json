@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "key": "0e444b40eb18a910c2c59e38e5e0f3813b202dbb32f14950aa41c8966493365c",
+      "request": {
+        "method": "POST",
+        "url": "https://litellm.example/v1/chat/completions",
+        "body": "{\"model\":\"demo\",\"messages\":[{\"role\":\"user\",\"content\":\"Mikä on Ruotsin pääkaupunki? Vastaa yhdellä sanalla.\"}],\"max_tokens\":1024}"
+      },
+      "response": {
+        "status": 200,
+        "statusText": "",
+        "contentType": "application/json",
+        "body": "{\"model\":\"demo\",\"choices\":[{\"message\":{\"content\":\"Tukholma\"}}],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":2}}"
+      }
+    },
+    {
+      "key": "c69c33bfa41da9de8f6345b1d99ab30d3387a5210aad493c2f163c461d1df65c",
+      "request": {
+        "method": "POST",
+        "url": "https://litellm.example/v1/chat/completions",
+        "body": "{\"model\":\"demo\",\"messages\":[{\"role\":\"user\",\"content\":\"Kuka kokosi Kalevalan suomalaisista kansanrunoista yhtenäiseksi teokseksi?\"}],\"max_tokens\":1024}"
+      },
+      "response": {
+        "status": 200,
+        "statusText": "",
+        "contentType": "application/json",
+        "body": "{\"model\":\"demo\",\"choices\":[{\"message\":{\"content\":\"Elias Lönnrot\"}}],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":2}}"
+      }
+    },
+    {
+      "key": "e12602ef3ac8349e4272cb8cd660461f5e4d6db0e7520fa7113a153e87edfa7f",
+      "request": {
+        "method": "POST",
+        "url": "https://litellm.example/v1/chat/completions",
+        "body": "{\"model\":\"demo\",\"messages\":[{\"role\":\"system\",\"content\":\"Vastaa vain lopputuloksella, ei välivaiheilla.\"},{\"role\":\"user\",\"content\":\"Laske 17 + 25.\"}],\"max_tokens\":1024}"
+      },
+      "response": {
+        "status": 200,
+        "statusText": "",
+        "contentType": "application/json",
+        "body": "{\"model\":\"demo\",\"choices\":[{\"message\":{\"content\":\"41\"}}],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":2}}"
+      }
+    }
+  ]
+}
