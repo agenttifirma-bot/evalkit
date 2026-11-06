@@ -27,6 +27,8 @@ npx evalkit --help
 
 ## Pika-aloitus
 
+> Komentojen `examples/yleinen-fi.json` on repossa mutta ei npm-paketissa (paketissa on vain `dist/`). Kun asennat paketin npm:stä, lataa tiedosto [repon examples-kansiosta](https://github.com/tonyweckstrom1987/evalkit/blob/main/examples/yleinen-fi.json) tai kirjoita oma evalset (muoto alempana).
+
 ```bash
 export LLM_API_KEY=...   # ei tarvita, jos rajapinta ei vaadi avainta
 
@@ -75,7 +77,7 @@ Kolmen minuutin ohje ennen/jälkeen-esimerkkeineen ja GitHub Action -pätkineen:
 ## Evalsetin tarkistus ilman kuluja
 
 ```bash
-node dist/bin.js validate examples/yleinen-fi.json evals/*.json
+npx evalkit validate examples/yleinen-fi.json evals/*.json
 ```
 
 `validate` lukee tiedostot, tarkistaa muodon (zod), kaksoisid:t ja virheelliset regex-lausekkeet eikä tee yhtään verkkokutsua. Se palauttaa 0, kun kaikki tiedostot kelpaavat, ja 2, jos yksikin ei kelpaa; kaikki tiedostot käydään läpi, joten saat kaikki virheet kerralla. Sopii CI:n ensimmäiseksi vaiheeksi.
@@ -170,11 +172,11 @@ Oikeat mallikutsut maksavat, ja vastaukset vaihtelevat ajosta toiseen. Tallenna 
 npm install --save-dev @tonyweckstrom/llm-cassette
 
 # Kerran paikallisesti, oikealla avaimella: tallentaa vastaukset
-node dist/bin.js run examples/yleinen-fi.json --models m --base-url https://litellm.local/v1 \
+npx evalkit run examples/yleinen-fi.json --models m --base-url https://litellm.local/v1 \
   --baseline evalkit.baseline.json --cassette test/cassettes/yleinen.json --cassette-mode record
 
 # CI:ssä: toistaa tallenteet, ei verkkoa eikä kuluja (replay on oletus)
-node dist/bin.js run examples/yleinen-fi.json --models m --base-url https://litellm.local/v1 \
+npx evalkit run examples/yleinen-fi.json --models m --base-url https://litellm.local/v1 \
   --baseline evalkit.baseline.json --cassette test/cassettes/yleinen.json
 ```
 
