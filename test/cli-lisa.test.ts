@@ -141,11 +141,12 @@ describe("cli: lisatestit", () => {
       expect(out).toContain("- m / a-02: contains: response does not contain 'Oslo'");
     });
 
-    it("tapaukset ilman odotuksia: 'ei arvioitavia' ja koodi 0", async () => {
+    it("tapaukset ilman odotuksia: tuloste 'nothing to evaluate' ja koodi 0", async () => {
       const p = writeJson("ei-odotuksia.json", { version: 1, cases: [{ id: "x", prompt: "p" }] });
       expect(await main(["run", p, "--models", "m", "--base-url", "http://llm.local/v1"], io(fakeLlm(() => "mita vain")))).toBe(0);
       expect(out).toContain("Evalkit\n");
-      expect(out).toContain("m: passed nothing to evaluate, errors 0");
+      expect(out).toContain("m: nothing to evaluate, errors 0");
+      expect(out).not.toContain("passed nothing");
       expect(out).not.toContain("Failed cases");
     });
 
@@ -171,7 +172,7 @@ describe("cli: lisatestit", () => {
       expect(out).toContain("m: pass rate dropped by 50 percentage points");
     });
 
-    it("parantuminen: korjaantuneet, 'nousi' ja koodi 0", async () => {
+    it("parantuminen: korjaantuneet, tuloste 'pass rate rose' ja koodi 0", async () => {
       const bp = writeJson("base.json", { version: 1, results: { "m::a-01": false, "m::a-02": false } });
       expect(await main([...common(), "--baseline", bp], io(fakeLlm(() => "Helsinki Oslo")))).toBe(0);
       expect(out).toContain("fixed: 2");

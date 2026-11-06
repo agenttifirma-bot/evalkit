@@ -80,8 +80,8 @@ function formatReport(report: Report): string {
   const lines: string[] = [];
   lines.push(`Evalkit${report.name ? `: ${report.name}` : ""}`);
   for (const m of report.perModel) {
-    const rate = m.passRate === null ? "nothing to evaluate" : `${m.passed}/${m.evaluated} (${Math.round(m.passRate * 100)} %)`;
-    lines.push(`  ${m.model}: passed ${rate}, errors ${m.errors}`);
+    const summary = m.passRate === null ? "nothing to evaluate" : `passed ${m.passed}/${m.evaluated} (${Math.round(m.passRate * 100)} %)`;
+    lines.push(`  ${m.model}: ${summary}, errors ${m.errors}`);
   }
   const failed = report.cases.filter((c) => c.passed === false);
   if (failed.length) {

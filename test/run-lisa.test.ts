@@ -53,7 +53,7 @@ describe("runEval: lisatestit", () => {
     expect(r.cases[0].error).toBeNull();
   });
 
-  it("kutsuraja laskee tuomarikutsut mallien yli: 2 mallia * (2 cases + 1 tuomarikutsu) = 6", async () => {
+  it("kutsuraja laskee tuomarikutsut mallien yli: 2 mallia * (2 tapausta + 1 tuomarikutsu) = 6", async () => {
     const cases = [
       { id: "a", prompt: "p", expect: { minJudgeScore: 3 } },
       { id: "b", prompt: "q" },
@@ -130,7 +130,7 @@ describe("runEval: lisatestit", () => {
     expect(r.cases[0].error).toBeNull();
   });
 
-  it("ilman no judge model was given raportin judgeModel on undefined", async () => {
+  it("ilman tuomarimallia raportin judgeModel on undefined", async () => {
     const l = fakeLlm(() => "ok");
     const r = await runEval({ set: set([{ id: "a", prompt: "p" }]), models: ["m"], baseUrl, fetch: l.fetch });
     expect(r.judgeModel).toBeUndefined();
