@@ -53,7 +53,7 @@ describe("runEval: lisatestit", () => {
     expect(r.cases[0].error).toBeNull();
   });
 
-  it("kutsuraja laskee tuomarikutsut mallien yli: 2 mallia * (2 tapausta + 1 tuomarikutsu) = 6", async () => {
+  it("kutsuraja laskee tuomarikutsut mallien yli: 2 mallia * (2 cases + 1 tuomarikutsu) = 6", async () => {
     const cases = [
       { id: "a", prompt: "p", expect: { minJudgeScore: 3 } },
       { id: "b", prompt: "q" },
@@ -63,7 +63,7 @@ describe("runEval: lisatestit", () => {
     expect(ok.calls).toHaveLength(6);
 
     const never = fakeLlm(() => "ok");
-    await expect(runEval({ set: set(cases), models: ["m1", "m2"], baseUrl, fetch: never.fetch, judgeModel: "t", maxCalls: 5 })).rejects.toThrow(/6 mallikutsua; enintään 5/);
+    await expect(runEval({ set: set(cases), models: ["m1", "m2"], baseUrl, fetch: never.fetch, judgeModel: "t", maxCalls: 5 })).rejects.toThrow(/6 model calls; at most 5/);
     expect(never.calls).toHaveLength(0);
   });
 
@@ -80,7 +80,7 @@ describe("runEval: lisatestit", () => {
     const r = await runEval({ set: set([{ id: "a", prompt: "p", expect: { contains: "x" } }]), models: ["m"], baseUrl, fetch: f });
     expect(r.cases[0].error).toBe("boom");
     expect(r.cases[0].passed).toBe(false);
-    expect(r.cases[0].failures).toEqual(["virhe: boom"]);
+    expect(r.cases[0].failures).toEqual(["error: boom"]);
     expect(r.cases[0].judgeScore).toBeNull();
   });
 
@@ -118,7 +118,7 @@ describe("runEval: lisatestit", () => {
   it("timeoutMs valitetaan mallikutsuun: hidas vastaus on virhe selkealla viestilla", async () => {
     const l = fakeLlm(() => ({ delayMs: 500, text: "myohaan" }));
     const r = await runEval({ set: set([{ id: "a", prompt: "p", expect: { contains: "x" } }]), models: ["m"], baseUrl, fetch: l.fetch, timeoutMs: 20 });
-    expect(r.cases[0].error).toMatch(/aikakatkaistiin \(20 ms\)/);
+    expect(r.cases[0].error).toMatch(/timed out \(20 ms\)/);
     expect(r.cases[0].passed).toBe(false);
   });
 
@@ -130,7 +130,7 @@ describe("runEval: lisatestit", () => {
     expect(r.cases[0].error).toBeNull();
   });
 
-  it("ilman tuomarimallia raportin judgeModel on undefined", async () => {
+  it("ilman no judge model was given raportin judgeModel on undefined", async () => {
     const l = fakeLlm(() => "ok");
     const r = await runEval({ set: set([{ id: "a", prompt: "p" }]), models: ["m"], baseUrl, fetch: l.fetch });
     expect(r.judgeModel).toBeUndefined();
