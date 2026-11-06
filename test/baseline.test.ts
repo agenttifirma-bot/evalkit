@@ -93,7 +93,7 @@ describe("baseline", () => {
     expect(compare(report([row("m", "a", false), row("m", "b", true)]), base).ok).toBe(false);
   });
 
-  it("regression syy on ensimmäinen virheilmoitus, tai 'kaatui' jos sitä ei ole", () => {
+  it("regression syy on ensimmäinen virheilmoitus, tai 'failed' jos sitä ei ole", () => {
     const base = { version: 1 as const, results: { "m::a": true } };
     const bare: CaseResult = { ...row("m", "a", false), failures: [] };
     expect(compare(report([bare]), base).regressions[0].reason).toBe("failed");

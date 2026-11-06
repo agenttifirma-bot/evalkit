@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -154,8 +154,14 @@ describe("cli: --cassette", () => {
   });
 
   it("LLM_CASSETTE_MODE ei vaikuta evalkitin kautta: tallenteen puuttuessa neuvo on --cassette-mode record", async () => {
+    // llm-cassette reads LLM_CASSETTE_MODE from process.env when no mode is passed.
+    vi.stubEnv("LLM_CASSETTE_MODE", "record");
     const never = fakeLlm(() => "Helsinki");
-    expect(await main(args(), io(never, { LLM_CASSETTE_MODE: "record" }))).toBe(1);
+    try {
+      expect(await main(args(), io(never))).toBe(1);
+    } finally {
+      vi.unstubAllEnvs();
+    }
     expect(never.calls).toHaveLength(0);
     expect(out).toMatch(/--cassette-mode record/);
   });

@@ -77,7 +77,7 @@ describe("runEval", () => {
     expect(never.calls).toHaveLength(0);
   });
 
-  it("minJudgeScore ilman no judge model was given hylätään ennen kutsuja", async () => {
+  it("minJudgeScore ilman tuomarimallia hylätään (viesti 'no judge model was given') ennen kutsuja", async () => {
     const never = fakeLlm(() => "ok");
     await expect(runEval({ set: set([{ id: "a", prompt: "p", expect: { minJudgeScore: 4 } }]), models: ["m"], baseUrl, fetch: never.fetch })).rejects.toThrow(/no judge model was given/);
     expect(never.calls).toHaveLength(0);
